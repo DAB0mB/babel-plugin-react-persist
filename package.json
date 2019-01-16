@@ -11,13 +11,11 @@
     "prepublish": "npm run build"
   },
   "dependencies": {
-    "@babel/generator": "^7.2.2"
-  },
-  "peerDependencies": {
-    "@babel/core": "^7.0.0-0"
+    "@babel/generator": "^7.2.2",
+    "@babel/parser": "^7.2.3"
   },
   "devDependencies": {
-    "@babel/core": "^7.2.0",
+    "@babel/core": "^7.2.2",
     "@babel/plugin-proposal-class-properties": "^7.2.1",
     "@babel/plugin-proposal-decorators": "^7.2.0",
     "@babel/plugin-proposal-export-namespace-from": "^7.2.0",
@@ -29,7 +27,6 @@
     "@babel/plugin-syntax-import-meta": "^7.2.0",
     "@babel/plugin-syntax-jsx": "^7.2.0",
     "@babel/plugin-transform-modules-commonjs": "^7.2.0",
-    "@babel/preset-env": "^7.0.0",
     "babel-core": "^7.0.0-bridge.0",
     "babel-eslint": "^9.0.0",
     "babel-jest": "^23.4.2",

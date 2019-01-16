@@ -1,11 +1,12 @@
 import generate from '@babel/generator'
+import { parse as superParse } from '@babel/parser'
 
-export default ({ types: t, parse: babelParse }) => {
-  let parseOptions
+export default ({ types: t }) => {
+  let parserOpts
 
   // Original parse + provided options
   const parse = (code) => {
-    return babelParse(code, parseOptions)
+    return superParse(code, parserOpts)
   }
 
   const getAllOwnBindings = (scope) => {
@@ -76,7 +77,7 @@ export default ({ types: t, parse: babelParse }) => {
   return {
     pre({ opts }) {
       // Store original parse options
-      parseOptions = opts
+      parserOpts = opts.parserOpts
     },
 
     visitor: {
