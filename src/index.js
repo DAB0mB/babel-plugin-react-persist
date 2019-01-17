@@ -29,12 +29,20 @@ export default ({ types: t }) => {
 
     parentPath.traverse({
       Identifier(path) {
+        // Unique identifier
+        if (identifiers.includes(path.node.name)) return
+        // Not global
+        if (!parentPath.scope.hasBinding(path.node.name)) return
+
+        // Not one of the function parameters, if it's a function
         if (
-          !identifiers.includes(path.node.name) &&
-          parentPath.scope.hasBinding(path.node.name)
+          parentPath.node.params &&
+          parentPath.node.params.some(param => param.name === path.node.name)
         ) {
-          identifiers.push(path.node.name)
+          return
         }
+
+        identifiers.push(path.node.name)
       },
     })
 

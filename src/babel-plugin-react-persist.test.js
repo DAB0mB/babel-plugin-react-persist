@@ -64,6 +64,26 @@ describe('babel-plugin-react-persist', () => {
     `))
   })
 
+  it('should avoid specifying function arguments as useCallback() arguments', () => {
+    const code = transform(`
+      ({ text }) => {
+        return (
+          <button onClick={(e) => alert(text)} />
+        )
+      }
+    `)
+
+    expect(code).toEqual(freeText(`
+      ({
+        text
+      }) => {
+        const _onClick = React.useCallback(e => alert(text), [text]);
+
+        return <button onClick={_onClick} />;
+      };
+    `))
+  })
+
   it('should NOT useCallback() for external functions', () => {
     const code = transform(`
       const onClick = () => {
