@@ -82,6 +82,41 @@ export default ({ types: t }) => {
     `).program.body[0]
   }
 
+  const isWrappedWithCreateElement = (path) => {
+    return (
+      path.parentPath &&
+      path.parentPath.parentPath &&
+      path.parentPath.parentPath.parentPath &&
+      t.isCallExpression(path.parentPath.parentPath.parentPath.node) &&
+      t.isMemberExpression(path.parentPath.parentPath.parentPath.node.callee) &&
+      path.parentPath.parentPath.parentPath.node.callee.object.name === 'React' &&
+      path.parentPath.parentPath.parentPath.node.callee.property.name === 'createElement'
+    )
+  }
+
+  const getKeyPropsString = (node) => {
+    if (!t.isJSXElement(node)) return 'null'
+
+    const keyAttr = node.openingElement.attributes.find((attr) => {
+      return attr.name.name == 'key'
+    })
+
+    if (!keyAttr) return 'null'
+
+    let key
+    if (t.isJSXExpressionContainer(keyAttr.value)) {
+      key = generate(keyAttr.value.expression).code
+    }
+    else if (t.isLiteral(keyAttr.value)) {
+      key = generate(keyAttr.value).code
+    }
+    else {
+      return 'null'
+    }
+
+    return `{ key: ${key} }`
+  }
+
   return {
     pre({ opts }) {
       // Store original parse options
@@ -90,8 +125,7 @@ export default ({ types: t }) => {
 
     visitor: {
       // Add scope to arrow functions and JSX blocks e.g.
-      // () => <el /> will become () => { return <el /> }
-      // {<el />} will become {(() => <el />)()}
+      // <el /> will become React.createElement(() => { return <el /> }, null)
       // this way we can use nested hooks
       JSXElement(path) {
         let returnValue = path
@@ -106,24 +140,21 @@ export default ({ types: t }) => {
         }
 
         if (!container) return
-
-        let scopedReturnValue
-        if (t.isArrowFunctionExpression(container.node)) {
-          scopedReturnValue = parse(`
-            () => {
-              return ${generate(returnValue.node).code}
-            }
-          `).program.body[0].expression.body
-        }
-        else if (t.isJSXExpressionContainer(container.node)) {
-          scopedReturnValue = parse(`
-            (() => {
-              return ${generate(returnValue.node).code}
-            })()
-          `).program.body[0]
+        // Container must be an arrow function or a JSX block
+        if (
+          !t.isArrowFunctionExpression(container.node) &&
+          !t.isJSXExpressionContainer(container.node)
+        ) {
+          return
         }
 
-        if (scopedReturnValue) {
+        if (!isWrappedWithCreateElement(returnValue)) {
+          const scopedReturnValue = parse(`
+            React.createElement(() => {
+              ${generate(returnValue.node).code}
+            }, ${getKeyPropsString(returnValue.node)})
+          `).program.body[0].expression
+
           returnValue.replaceWith(scopedReturnValue)
         }
       },
@@ -155,6 +186,20 @@ export default ({ types: t }) => {
       // and replace them with useCallback() or useMemo()
       ReturnStatement(path) {
         if (!t.isJSXElement(path.node.argument)) return
+
+        if (!isWrappedWithCreateElement(path)) {
+          const returnStatement = parse(`
+            () => {
+              return React.createElement(() => {
+                ${generate(path.node).code}
+              }, ${getKeyPropsString(path.node.argument)})
+            }
+          `).program.body[0].expression.body.body[0]
+
+          path.replaceWith(returnStatement)
+
+          return
+        }
 
         const ownBindings = getAllOwnBindings(path.scope)
 
