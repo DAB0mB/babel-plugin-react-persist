@@ -5,11 +5,11 @@ export default ({ types: t }) => {
   let parserOpts
 
   // Original parse + provided options
-  const parse = (code) => {
+  const parse = code => {
     return superParse(code, parserOpts)
   }
 
-  const getAllOwnBindings = (scope) => {
+  const getAllOwnBindings = scope => {
     const allBindings = scope.getAllBindings()
 
     return Object.keys(allBindings).reduce((ownBindings, bindingName) => {
@@ -24,65 +24,83 @@ export default ({ types: t }) => {
   }
 
   // Return a unique list
-  const getAllIdentifierNames = (parentPath) => {
-    const identifiers = []
+  const getValueExpressions = parentPath => {
+    const values = []
 
     parentPath.traverse({
-      Identifier(path) {
-        // Unique identifier
-        if (identifiers.includes(path.node.name)) return
-        // Not global
-        if (!parentPath.scope.hasBinding(path.node.name)) return
+      // First collect root identifiers
+      Identifier: {
+        enter(path) {
+          // Unique identifier
+          if (values.includes(path.node.name)) return
+          // Not global
+          if (!parentPath.scope.hasBinding(path.node.name)) return
 
-        // Not one of the function parameters, if it's a function
-        if (
-          parentPath.node.params &&
-          parentPath.node.params.some(param => param.name === path.node.name)
-        ) {
-          return
-        }
+          // Not one of the function parameters, if it's a function
+          if (
+            parentPath.node.params &&
+            parentPath.node.params.some(param => param.name === path.node.name)
+          ) {
+            return
+          }
 
-        identifiers.push(path.node.name)
+          values.push(path.node.name)
+        },
+      },
+
+      // Once the root identifier has been collected, look at its member expressions
+      MemberExpression: {
+        exit(path) {
+          // Much easier to go through the string in this case
+          const expressionString = generate(path.node).code
+
+          // Include expressions which only use . and not []
+          if (/[^.$\w]/.test(expressionString)) return
+
+          const rootIdentifier = expressionString.split('.')[0]
+
+          if (!values.includes(rootIdentifier)) return
+          if (values.includes(expressionString)) return
+
+          values.push(expressionString)
+        },
       },
     })
 
-    return identifiers
+    return values
   }
 
   // Arrow function or regular function
-  const isAnyFunctionExpression = (node) => {
-    return node && (
-      t.isArrowFunctionExpression(node) ||
-      t.isFunctionExpression(node)
-    )
+  const isAnyFunctionExpression = node => {
+    return node && (t.isArrowFunctionExpression(node) || t.isFunctionExpression(node))
   }
 
   // If expression ends up with a useXXX()
-  const isReactHook = (node) => {
+  const isReactHook = node => {
     return /^use/.test(node.name) || /^use/.test(node.property.name)
   }
 
   // Example output: const foo = useCallback(() => alert(text), [text])
   const generateCallback = (callbackName, callbackBody) => {
-    const identifiers = getAllIdentifierNames(callbackBody)
+    const values = getValueExpressions(callbackBody)
     callbackBody = generate(callbackBody.node).code
 
     return parse(`
-      const ${callbackName} = React.useCallback(${callbackBody}, [${identifiers}])
+      const ${callbackName} = React.useCallback(${callbackBody}, [${values}])
     `).program.body[0]
   }
 
   // Example output: const foo = useMemo(() => bar, [bar])
   const generateMemo = (memoName, memoBody) => {
-    const identifiers = getAllIdentifierNames(memoBody)
+    const values = getValueExpressions(memoBody)
     memoBody = generate(memoBody.node).code
 
     return parse(`
-      const ${memoName} = React.useMemo(() => ${memoBody}, [${identifiers}])
+      const ${memoName} = React.useMemo(() => ${memoBody}, [${values}])
     `).program.body[0]
   }
 
-  const isWrappedWithCreateElement = (path) => {
+  const isWrappedWithCreateElement = path => {
     return (
       path.parentPath &&
       path.parentPath.parentPath &&
@@ -94,10 +112,13 @@ export default ({ types: t }) => {
     )
   }
 
-  const getKeyPropsString = (node) => {
+  // Will check for key attributes in the given JSX element and will return a JSON
+  // that could be provided to a React.createElement()
+  // e.g. key={t} -> { key: t }
+  const getKeyPropsString = node => {
     if (!t.isJSXElement(node)) return 'null'
 
-    const keyAttr = node.openingElement.attributes.find((attr) => {
+    const keyAttr = node.openingElement.attributes.find(attr => {
       return attr.name.name == 'key'
     })
 
@@ -106,11 +127,9 @@ export default ({ types: t }) => {
     let key
     if (t.isJSXExpressionContainer(keyAttr.value)) {
       key = generate(keyAttr.value.expression).code
-    }
-    else if (t.isLiteral(keyAttr.value)) {
+    } else if (t.isLiteral(keyAttr.value)) {
       key = generate(keyAttr.value).code
-    }
-    else {
+    } else {
       return 'null'
     }
 
@@ -197,13 +216,11 @@ export default ({ types: t }) => {
           `).program.body[0].expression.body.body[0]
 
           path.replaceWith(returnStatement)
-
-          return
         }
 
         const ownBindings = getAllOwnBindings(path.scope)
 
-        Object.keys(ownBindings).forEach((bindingName) => {
+        Object.keys(ownBindings).forEach(bindingName => {
           const binding = ownBindings[bindingName]
 
           if (!binding.constant) return
@@ -218,10 +235,7 @@ export default ({ types: t }) => {
           const generateReplacement = isAnyFunctionExpression(binding.path.node.init)
             ? generateCallback
             : generateMemo
-          const wrappedAssignment = generateReplacement(
-            bindingName,
-            binding.path.get('init')
-          )
+          const wrappedAssignment = generateReplacement(bindingName, binding.path.get('init'))
 
           binding.path.parentPath.replaceWith(wrappedAssignment)
         })
