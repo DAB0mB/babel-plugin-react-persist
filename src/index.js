@@ -101,14 +101,18 @@ export default ({ types: t }) => {
   }
 
   const isWrappedWithCreateElement = path => {
-    return (
+    const callExpression =
       path.parentPath &&
       path.parentPath.parentPath &&
       path.parentPath.parentPath.parentPath &&
-      t.isCallExpression(path.parentPath.parentPath.parentPath.node) &&
-      t.isMemberExpression(path.parentPath.parentPath.parentPath.node.callee) &&
-      path.parentPath.parentPath.parentPath.node.callee.object.name === 'React' &&
-      path.parentPath.parentPath.parentPath.node.callee.property.name === 'createElement'
+      path.parentPath.parentPath.parentPath.parentPath
+
+    return (
+      callExpression &&
+      t.isCallExpression(callExpression.node) &&
+      t.isMemberExpression(callExpression.node.callee) &&
+      callExpression.node.callee.object.name === 'React' &&
+      callExpression.node.callee.property.name === 'createElement'
     )
   }
 
@@ -143,39 +147,19 @@ export default ({ types: t }) => {
     },
 
     visitor: {
-      // Add scope to arrow functions and JSX blocks e.g.
-      // <el /> will become React.createElement(() => { return <el /> }, null)
-      // this way we can use nested hooks
+      // Wrap root JSXElements with React.createElement()
+      // e.g. <el /> -> React.createElement(() => { return <el /> })
       JSXElement(path) {
-        let returnValue = path
-        let container = path.parentPath
-        while (
-          t.isJSXElement(container.node) ||
-          t.isConditionalExpression(container.node) ||
-          t.isLogicalExpression(container.node)
-        ) {
-          returnValue = returnValue.parentPath
-          container = container.parentPath
-        }
+        if (t.isJSXElement(path.parentPath.node)) return
+        if (isWrappedWithCreateElement(path)) return
 
-        if (!container) return
-        // Container must be an arrow function or a JSX block
-        if (
-          !t.isArrowFunctionExpression(container.node) &&
-          !t.isJSXExpressionContainer(container.node)
-        ) {
-          return
-        }
+        const wrappedJSXElement = parse(`
+          React.createElement(() => {
+            return ${generate(path.node).code}
+          }, ${getKeyPropsString(path.node)})
+        `).program.body[0].expression
 
-        if (!isWrappedWithCreateElement(returnValue)) {
-          const scopedReturnValue = parse(`
-            React.createElement(() => {
-              ${generate(returnValue.node).code}
-            }, ${getKeyPropsString(returnValue.node)})
-          `).program.body[0].expression
-
-          returnValue.replaceWith(scopedReturnValue)
-        }
+        path.replaceWith(wrappedJSXElement)
       },
 
       // Add useCallback() for all inline functions
@@ -205,18 +189,8 @@ export default ({ types: t }) => {
       // and replace them with useCallback() or useMemo()
       ReturnStatement(path) {
         if (!t.isJSXElement(path.node.argument)) return
-
-        if (!isWrappedWithCreateElement(path)) {
-          const returnStatement = parse(`
-            () => {
-              return React.createElement(() => {
-                ${generate(path.node).code}
-              }, ${getKeyPropsString(path.node.argument)})
-            }
-          `).program.body[0].expression.body.body[0]
-
-          path.replaceWith(returnStatement)
-        }
+        // Will ignore block scoped return statements e.g. wrapped by if {}
+        if (!isAnyFunctionExpression(path.parentPath.parentPath.node)) return
 
         const ownBindings = getAllOwnBindings(path.scope)
 
