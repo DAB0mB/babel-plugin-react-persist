@@ -3,6 +3,7 @@ import { parse as superParse } from '@babel/parser'
 
 export default ({ types: t }) => {
   let parserOpts
+  let program
 
   // Original parse + provided options
   const parse = code => {
@@ -100,19 +101,38 @@ export default ({ types: t }) => {
     `).program.body[0]
   }
 
+  // e.g. <el /> -> React.createElement(_anonymousFnComponent = _anonymousFnComponent || () => {
+  //  return <el />
+  // }, null)
+  const generateElementWrapper = (id, jsxElement) => {
+    return parse(`
+      React.createElement(${id.name} = ${id.name} || (() => {
+        return ${generate(jsxElement.node).code}
+      }), ${getKeyPropsString(jsxElement.node)})
+    `).program.body[0].expression
+  }
+
+  // Checks if given JSX element is wrapped with the function above
   const isWrappedWithCreateElement = path => {
-    const callExpression =
-      path.parentPath &&
-      path.parentPath.parentPath &&
-      path.parentPath.parentPath.parentPath &&
-      path.parentPath.parentPath.parentPath.parentPath
+    let currPath = path
+    if (!currPath || !t.isJSXElement(currPath.node)) return false
+    currPath = currPath.parentPath
+    if (!currPath || !t.isReturnStatement(currPath.node)) return false
+    currPath = currPath.parentPath
+    if (!currPath || !t.isBlockStatement(currPath.node)) return false
+    currPath = currPath.parentPath
+    if (!currPath || !t.isArrowFunctionExpression(currPath.node)) return false
+    currPath = currPath.parentPath
+    if (!currPath || !t.isLogicalExpression(currPath.node)) return false
+    currPath = currPath.parentPath
+    if (!currPath || !t.isAssignmentExpression(currPath.node)) return false
+    currPath = currPath.parentPath
+    if (!currPath || !t.isCallExpression(currPath.node)) return false
 
     return (
-      callExpression &&
-      t.isCallExpression(callExpression.node) &&
-      t.isMemberExpression(callExpression.node.callee) &&
-      callExpression.node.callee.object.name === 'React' &&
-      callExpression.node.callee.property.name === 'createElement'
+      t.isMemberExpression(currPath.node.callee) &&
+      currPath.node.callee.object.name === 'React' &&
+      currPath.node.callee.property.name === 'createElement'
     )
   }
 
@@ -147,25 +167,30 @@ export default ({ types: t }) => {
     },
 
     visitor: {
-      // Wrap root JSXElements with React.createElement()
-      // e.g. <el /> -> React.createElement(() => { return <el /> })
-      JSXElement(path) {
-        if (t.isJSXElement(path.parentPath.node)) return
-        if (isWrappedWithCreateElement(path)) return
-
-        const wrappedJSXElement = parse(`
-          React.createElement(() => {
-            return ${generate(path.node).code}
-          }, ${getKeyPropsString(path.node)})
-        `).program.body[0].expression
-
-        path.replaceWith(wrappedJSXElement)
+      Program(path) {
+        program = path
       },
 
       // Add useCallback() for all inline functions
       JSXAttribute(path) {
         if (!t.isJSXExpressionContainer(path.node.value)) return
         if (!isAnyFunctionExpression(path.node.value.expression)) return
+
+        let rootJSXElement = path.parentPath.parentPath
+        while (t.isJSXElement(rootJSXElement.parentPath)) {
+          rootJSXElement = rootJSXElement.parentPath
+        }
+
+        // Wrap root JSXElement with React.createElement(). This way we can have an inline
+        // scope for internal hooks
+        if (!isWrappedWithCreateElement(rootJSXElement)) {
+          const componentName = path.scope.generateUidIdentifier('anonymousFnComponent')
+          program.scope.push({ id: componentName, kind: 'let' })
+          const wrappedJSXElement = generateElementWrapper(componentName, rootJSXElement)
+          rootJSXElement.replaceWith(wrappedJSXElement)
+
+          return
+        }
 
         let returnStatement = path
         while (returnStatement && !t.isReturnStatement(returnStatement)) {
