@@ -36,10 +36,14 @@ describe('babel-plugin-react-persist', () => {
     `)
 
     expect(code).toEqual(freeText(`
-      () => {
-        const _onClick = React.useCallback(() => alert('clicked'), []);
+      let _anonymousFnComponent;
 
-        return <button onClick={_onClick} />;
+      () => {
+        return React.createElement(_anonymousFnComponent = _anonymousFnComponent || (() => {
+          const _onClick = React.useCallback(() => alert('clicked'), []);
+
+          return <button onClick={_onClick} />;
+        }), null);
       };
     `))
   })
@@ -54,12 +58,16 @@ describe('babel-plugin-react-persist', () => {
     `)
 
     expect(code).toEqual(freeText(`
+      let _anonymousFnComponent;
+
       ({
         text
       }) => {
-        const _onClick = React.useCallback(() => alert(text), [text]);
+        return React.createElement(_anonymousFnComponent = _anonymousFnComponent || (() => {
+          const _onClick = React.useCallback(() => alert(text), [text]);
 
-        return <button onClick={_onClick} />;
+          return <button onClick={_onClick} />;
+        }), null);
       };
     `))
   })
@@ -74,12 +82,16 @@ describe('babel-plugin-react-persist', () => {
     `)
 
     expect(code).toEqual(freeText(`
+      let _anonymousFnComponent;
+
       ({
         text
       }) => {
-        const _onClick = React.useCallback(e => alert(text), [text]);
+        return React.createElement(_anonymousFnComponent = _anonymousFnComponent || (() => {
+          const _onClick = React.useCallback(e => alert(text), [text]);
 
-        return <button onClick={_onClick} />;
+          return <button onClick={_onClick} />;
+        }), null);
       };
     `))
   })
@@ -138,13 +150,15 @@ describe('babel-plugin-react-persist', () => {
     `)
 
     expect(code).toEqual(freeText(`
+      let _anonymousFnComponent;
+
       ({
         history
-      }) => {
-        const _onClick = React.useCallback(() => history.pop(), [history]);
+      }) => React.createElement(_anonymousFnComponent = _anonymousFnComponent || (() => {
+        const _onClick = React.useCallback(() => history.pop(), [history, history.pop]);
 
         return <button onClick={_onClick} />;
-      };
+      }), null);
     `))
   })
 
@@ -163,11 +177,13 @@ describe('babel-plugin-react-persist', () => {
     `)
 
     expect(code).toEqual(freeText(`
+      let _anonymousFnComponent, _anonymousFnComponent2;
+
       ({
         data,
         history
-      }) => {
-        const _onClick = React.useCallback(() => history.pop(), [history]);
+      }) => React.createElement(_anonymousFnComponent = _anonymousFnComponent || (() => {
+        const _onClick = React.useCallback(() => history.pop(), [history, history.pop]);
 
         return <div>
                 <button onClick={_onClick} />
@@ -175,14 +191,16 @@ describe('babel-plugin-react-persist', () => {
                   {data.map(({
               id,
               value
-            }) => {
-              const _onClick2 = React.useCallback(() => history.push(\`/data/$\{id\}\`), [history, id]);
+            }) => React.createElement(_anonymousFnComponent2 = _anonymousFnComponent2 || (() => {
+              const _onClick2 = React.useCallback(() => history.push(\`/data/\$\{id\}\`), [history, history.push, id]);
 
               return <li key={id} onClick={_onClick2}>{value}</li>;
-            })}
+            }), {
+              key: id
+            }))}
                 </ul>
               </div>;
-      };
+      }), null);
     `))
   })
 
@@ -200,23 +218,25 @@ describe('babel-plugin-react-persist', () => {
     `)
 
     expect(code).toEqual(freeText(`
+      let _anonymousFnComponent, _anonymousFnComponent2;
+
       ({
         foo
-      }) => {
-        return <div>
-                {(() => {
-            const _onClick = React.useCallback(() => alert('foo'), []);
+      }) => <div>
+                {foo ? React.createElement(_anonymousFnComponent = _anonymousFnComponent || (() => {
+          const _onClick = React.useCallback(() => alert('foo'), []);
 
-            const _onClick2 = React.useCallback(() => alert('not foo'), []);
+          return <button onClick={_onClick} />;
+        }), null) : React.createElement(_anonymousFnComponent2 = _anonymousFnComponent2 || (() => {
+          const _onClick2 = React.useCallback(() => alert('not foo'), []);
 
-            return foo ? <button onClick={_onClick} /> : <button onClick={_onClick2} />;
-          })()}
+          return <button onClick={_onClick2} />;
+        }), null)}
               </div>;
-      };
     `))
   })
 
-  it('should NOT transform inline functions for JSX elements in if statements', () => {
+  it('should transform inline functions for JSX elements in if statements', () => {
     const code = transform(`
       ({ foo }) => {
         if (foo) {
@@ -232,16 +252,24 @@ describe('babel-plugin-react-persist', () => {
     `)
 
     expect(code).toEqual(freeText(`
+      let _anonymousFnComponent, _anonymousFnComponent2;
+
       ({
         foo
       }) => {
         if (foo) {
-          return <button onClick={() => alert('foo')} />;
+          return React.createElement(_anonymousFnComponent = _anonymousFnComponent || (() => {
+            const _onClick = React.useCallback(() => alert('foo'), []);
+
+            return <button onClick={_onClick} />;
+          }), null);
         }
 
-        const _onClick = React.useCallback(() => alert('not foo'), []);
+        return React.createElement(_anonymousFnComponent2 = _anonymousFnComponent2 || (() => {
+          const _onClick2 = React.useCallback(() => alert('not foo'), []);
 
-        return <button onClick={_onClick} />;
+          return <button onClick={_onClick2} />;
+        }), null);
       };
     `))
   })
@@ -271,11 +299,9 @@ describe('babel-plugin-react-persist', () => {
         sortComparator,
         filterPredicate
       }) => {
-        const transformedData = React.useMemo(() => data.filter(filterPredicate).sort(sortComparator), [data, filterPredicate, sortComparator]);
+        const transformedData = React.useMemo(() => data.filter(filterPredicate).sort(sortComparator), [data, data.filter, filterPredicate, sortComparator]);
         return <ul>
-                  {transformedData.map(d => {
-            return <li>d</li>;
-          })}
+                  {transformedData.map(d => <li>d</li>)}
                 </ul>;
       });
     `))
@@ -310,9 +336,7 @@ describe('babel-plugin-react-persist', () => {
         let transformedData = [];
         transformedData = data.filter(filterPredicate).sort(sortComparator);
         return <ul>
-                  {transformedData.map(d => {
-            return <li>d</li>;
-          })}
+                  {transformedData.map(d => <li>d</li>)}
                 </ul>;
       });
     `))
