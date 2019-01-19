@@ -1,10 +1,7 @@
 import generate from '@babel/generator'
 import { parse as superParse } from '@babel/parser'
 
-export default ({ types: t }) => {
-  let parserOpts
-  let program
-
+const createPlugin = ({ types: t }, parserOpts, program) => {
   // Original parse + provided options
   const parse = code => {
     return superParse(code, parserOpts)
@@ -188,6 +185,12 @@ export default ({ types: t }) => {
           program.scope.push({ id: componentName, kind: 'let' })
           const wrappedJSXElement = generateElementWrapper(componentName, rootJSXElement)
           rootJSXElement.replaceWith(wrappedJSXElement)
+          rootJSXElement.skip()
+
+          const plugin = createPlugin({ types: t }, parserOpts, program)
+
+          // Continue traversal with replaced node only
+          rootJSXElement.traverse(plugin.visitor)
 
           return
         }
@@ -242,3 +245,5 @@ export default ({ types: t }) => {
     },
   }
 }
+
+export default createPlugin
