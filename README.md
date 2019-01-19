@@ -35,21 +35,21 @@ export default ({ data, sortComparator, filterPredicate, history }) => {
     data.filter(filterPredicate).sort(sortComparator)
   , [data, data.filter, filterPredicate, sortComparator])
 
-  return React.createElement(_anonymousFnComponent = _anonymousFnComponent || (() => {
-    const _onClick = React.useCallback(() => history.pop(), [history, history.pop])
+  return React.createElement(_anonymousFnComponent2 = _anonymousFnComponent2 || (() => {
+    const _onClick2 = React.useCallback(() => history.pop(), [history, history.pop])
 
     return (
       <div>
-        <button className="back-btn" onClick={_onClick} />
+        <button className="back-btn" onClick={_onClick2} />
         <ul className="data-list">
           {transformedData.map(({ id, value }) =>
-            React.createElement(_anonymousFnComponent2 = _anonymousFnComponent2 || (() => {
-              const _onClick2 = React.useCallback(() =>
+            React.createElement(_anonymousFnComponent = _anonymousFnComponent || (() => {
+              const _onClick = React.useCallback(() =>
                 history.push(`data/${id}`)
               , [history, history.push, id])
 
               return (
-                <li className="data-item" key={id} onClick={_onClick2}>
+                <li className="data-item" key={id} onClick={_onClick}>
                   {value}
                 </li>
               )

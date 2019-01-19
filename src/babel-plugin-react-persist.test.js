@@ -182,19 +182,19 @@ describe('babel-plugin-react-persist', () => {
       ({
         data,
         history
-      }) => React.createElement(_anonymousFnComponent = _anonymousFnComponent || (() => {
-        const _onClick = React.useCallback(() => history.pop(), [history, history.pop]);
+      }) => React.createElement(_anonymousFnComponent2 = _anonymousFnComponent2 || (() => {
+        const _onClick2 = React.useCallback(() => history.pop(), [history, history.pop]);
 
         return <div>
-                <button onClick={_onClick} />
+                <button onClick={_onClick2} />
                 <ul>
                   {data.map(({
               id,
               value
-            }) => React.createElement(_anonymousFnComponent2 = _anonymousFnComponent2 || (() => {
-              const _onClick2 = React.useCallback(() => history.push(\`/data/\$\{id\}\`), [history, history.push, id]);
+            }) => React.createElement(_anonymousFnComponent = _anonymousFnComponent || (() => {
+              const _onClick = React.useCallback(() => history.push(\`/data/\$\{id\}\`), [history, history.push, id]);
 
-              return <li key={id} onClick={_onClick2}>{value}</li>;
+              return <li key={id} onClick={_onClick}>{value}</li>;
             }), {
               key: id
             }))}

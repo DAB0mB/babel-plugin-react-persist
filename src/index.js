@@ -1,7 +1,12 @@
 import generate from '@babel/generator'
 import { parse as superParse } from '@babel/parser'
 
-const createPlugin = ({ types: t }, parserOpts, program) => {
+export default ({ types: t }) => {
+  // JSX elements that should have their own scope with React.createElement()
+  const jsxElementsToWrap = new Set()
+  let parserOpts
+  let program
+
   // Original parse + provided options
   const parse = code => {
     return superParse(code, parserOpts)
@@ -168,6 +173,20 @@ const createPlugin = ({ types: t }, parserOpts, program) => {
         program = path
       },
 
+      JSXElement: {
+        exit(path) {
+          if (!jsxElementsToWrap.has(path)) return
+
+          const componentName = path.scope.generateUidIdentifier('anonymousFnComponent')
+          program.scope.push({ id: componentName, kind: 'let' })
+
+          const wrappedJSXElement = generateElementWrapper(componentName, path)
+          path.replaceWith(wrappedJSXElement)
+
+          jsxElementsToWrap.delete(path)
+        },
+      },
+
       // Add useCallback() for all inline functions
       JSXAttribute(path) {
         if (!t.isJSXExpressionContainer(path.node.value)) return
@@ -181,17 +200,10 @@ const createPlugin = ({ types: t }, parserOpts, program) => {
         // Wrap root JSXElement with React.createElement(). This way we can have an inline
         // scope for internal hooks
         if (!isWrappedWithCreateElement(rootJSXElement)) {
-          const componentName = path.scope.generateUidIdentifier('anonymousFnComponent')
-          program.scope.push({ id: componentName, kind: 'let' })
-          const wrappedJSXElement = generateElementWrapper(componentName, rootJSXElement)
-          rootJSXElement.replaceWith(wrappedJSXElement)
-          rootJSXElement.skip()
+          jsxElementsToWrap.add(rootJSXElement)
 
-          const plugin = createPlugin({ types: t }, parserOpts, program)
-
-          // Continue traversal with replaced node only
-          rootJSXElement.traverse(plugin.visitor)
-
+          // We escape now, but we should be back again at the second round of traversal
+          // after replacement at visitor.JSXElement
           return
         }
 
@@ -245,5 +257,3 @@ const createPlugin = ({ types: t }, parserOpts, program) => {
     },
   }
 }
-
-export default createPlugin
