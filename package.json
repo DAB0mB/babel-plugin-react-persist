@@ -1,6 +1,6 @@
 {
   "name": "babel-plugin-react-persist",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Automatically useCallback() and useMemo()",
   "license": "MIT",
   "repository": "https://github.com/DAB0mB/babel-plugin-react-persist.git",
