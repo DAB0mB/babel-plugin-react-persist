@@ -2,22 +2,15 @@
 
 # babel-plugin-react-persist
 
-A Babel plug-in that optimizes your React components' implementation by automatically detecting declarations that should persist between rendering phases and replacing them with `useCallback()` and `useMemo()` whenever necessary. This plug-in can also be used with inline anonymous functions in JSX attributes and solve excessive processing power issues. **Note that this plug-in is experimental and shouldn't be used in production yet**. Compatible with React 16.7 and above (hooks support).
+A Babel plug-in that optimizes your React.Component's implementation by automatically detecting declarations that should persist between rendering phases and replacing them with `useCallback()` and `useMemo()` whenever necessary. This plug-in can also be used to solve excessive processing power caused by using anonymous callbacks provided to JSX element by making them non-anonymous. **Note that this plug-in is experimental and shouldn't be used in production yet**. Compatible with React 16.8-alpha and above (hooks support).
 
 ### Example
 
 #### in
 
 ```jsx
-export default ({
-  data,
-  sortComparator,
-  filterPredicate,
-  history,
-}) => {
-  const transformedData = data
-    .filter(filterPredicate)
-    .sort(sortComparator)
+export default ({ data, sortComparator, filterPredicate, history }) => {
+  const transformedData = data.filter(filterPredicate).sort(sortComparator)
 
   return (
     <div>
@@ -35,39 +28,38 @@ export default ({
 #### out
 
 ```jsx
-export default (({
-  data,
-  sortComparator,
-  filterPredicate,
-  history,
-}) => {
+let _anonymousFnComponent, _anonymousFnComponent2
+
+export default ({ data, sortComparator, filterPredicate, history }) => {
   const transformedData = React.useMemo(() =>
-    data
-      .filter(filterPredicate)
-      .sort(sortComparator)
-  , [data, filterPredicate, sortComparator])
+    data.filter(filterPredicate).sort(sortComparator)
+  , [data, data.filter, filterPredicate, sortComparator])
 
-  const _onClick = React.useCallback(() =>
-    history.pop()
-  , [history])
+  return React.createElement(_anonymousFnComponent = _anonymousFnComponent || (() => {
+    const _onClick = React.useCallback(() => history.pop(), [history, history.pop])
 
-  return (
-    <div>
-      <button className="back-btn" onClick={_onClick} />
-      <ul className="data-list">
-        {transformedData.map(({ id, value }) => {
-          const _onClick2 = React.useCallback(() =>
-            history.push(`data/${id}`)
-          , [history, id])
+    return (
+      <div>
+        <button className="back-btn" onClick={_onClick} />
+        <ul className="data-list">
+          {transformedData.map(({ id, value }) =>
+            React.createElement(_anonymousFnComponent2 = _anonymousFnComponent2 || (() => {
+              const _onClick2 = React.useCallback(() =>
+                history.push(`data/${id}`)
+              , [history, history.push, id])
 
-          return (
-            <li className="data-item" key={id} onClick={_onClick2}>{value}</li>
-          )
-        })}
-      </ul>
-    </div>
-  )
-})
+              return (
+                <li className="data-item" key={id} onClick={_onClick2}>
+                  {value}
+                </li>
+              )
+            }), { key: id })
+          )}
+        </ul>
+      </div>
+    )
+  }), null)
+}
 ```
 
 ### Usage
